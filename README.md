@@ -1,16 +1,18 @@
 # Graphistry MCP Server
 
-A Model Context Protocol (MCP) server for integrating Graphistry's graph visualization capabilities with LLM workflows.
+A Model Context Protocol (MCP) server for integrating Graphistry's graph visualization capabilities with LLM workflows, focusing on advanced graph insights and investigations for network analysis, threat detection, and pattern discovery.
 
 Developed by the Graphistry Community.
 
 ## Features
 
 - GPU-accelerated graph visualization via Graphistry
+- Advanced pattern discovery and relationship analysis
 - Streamable HTTP interface for resumable connections
 - Support for various graph data formats (Pandas, NetworkX, edge lists)
 - Interactive graph visualization and exploration
 - Layout control for different visualization types
+- Network investigation and anomaly detection capabilities
 
 ## Installation
 
@@ -41,22 +43,30 @@ The server can be run in two modes:
 
 ### Available Tools
 
-The Graphistry MCP server provides the following tools:
+The Graphistry MCP server provides the following tools for graph insights and investigations:
 
 1. **visualize_graph** - Create a graph visualization from different data formats:
    - Supports pandas, networkx, and edge_list formats
    - Customizable node and edge attributes
    - Returns a unique graph ID and visualization URL
+   - Reveals patterns and connections in complex data
 
 2. **get_graph_info** - Retrieve information about a stored graph:
    - Access metadata for previously created visualizations
    - Get the visualization URL for sharing
+   - Analyze graph metrics and statistics
 
 3. **apply_layout** - Change the layout algorithm for a graph:
-   - Force directed layout
-   - Radial layout
-   - Circle layout
-   - Grid layout
+   - Force directed layout for natural clustering
+   - Radial layout for hierarchical relationship investigation
+   - Circle layout for symmetry analysis
+   - Grid layout for structural comparisons
+
+4. **detect_patterns** - Identify interesting patterns within graphs:
+   - Community detection for network segmentation
+   - Path finding between key entities
+   - Centrality metrics for key node identification
+   - Anomaly detection for outlier identification
 
 ### Example Client Usage
 
