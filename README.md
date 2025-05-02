@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server for integrating Graphistry's graph visualization capabilities with LLM workflows.
 
+Developed by the Graphistry Community.
+
 ## Features
 
 - GPU-accelerated graph visualization via Graphistry

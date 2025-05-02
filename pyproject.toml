@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-    { name = "GraphistryMCP Contributors" }
+    { name = "Graphistry Community" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
