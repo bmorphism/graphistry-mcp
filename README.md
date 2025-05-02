@@ -18,7 +18,7 @@ Developed by the Graphistry Community.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/graphistry-mcp.git
+git clone https://github.com/bmorphism/graphistry-mcp.git
 cd graphistry-mcp
 
 # Run the setup script which uses uv for dependency management
