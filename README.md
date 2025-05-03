@@ -1,10 +1,17 @@
-# Graphistry FastMCP Server
+# Graphistry MCP Integration
 
-A [Model-Control-Program (MCP)](https://github.com/llmOS/mcp) server for integrating Graphistry's graph visualization capabilities with LLM workflows, focusing on advanced graph insights and investigations for network analysis, threat detection, and pattern discovery.
+GPU-accelerated graph visualization and analytics for Large Language Models using Graphistry and MCP.
 
-Built using [FastMCP](https://github.com/jlowin/fastmcp), this implementation provides a streamlined API with robust HTTP streaming support.
+## Overview
 
-Developed by the Graphistry Community.
+This project integrates Graphistry's powerful GPU-accelerated graph visualization platform with the Model Control Protocol (MCP), enabling advanced graph analytics capabilities for AI assistants like Claude. It allows LLMs to visualize and analyze complex network data through a standardized interface.
+
+Key features:
+- GPU-accelerated graph visualization via Graphistry
+- Advanced pattern discovery and relationship analysis
+- Network analytics (community detection, centrality, path finding, anomaly detection)
+- Mock implementation for development without credentials
+- Support for various data formats (Pandas, NetworkX, edge lists)
 
 ## 🚨 Important: Graphistry Registration Required
 
@@ -31,18 +38,65 @@ Without these credentials, certain visualization features will be limited.
 
 ## Installation
 
+### Quick Installation with uvx
+
+This project uses [uvx](https://astral.sh/uv) for dependency management, which provides faster and more reliable Python package installations.
+
 ```bash
 # Clone the repository
 git clone https://github.com/bmorphism/graphistry-mcp.git
 cd graphistry-mcp
 
-# Run the setup script which uses uv for dependency management
-./setup-graphistry-mcp.sh
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Set up virtual environment and install dependencies
+uv venv .venv
+source .venv/bin/activate
+uvx pip install -e ".[dev]"
 
 # Set up your Graphistry credentials (obtained from hub.graphistry.com)
 export GRAPHISTRY_USERNAME=your_username
 export GRAPHISTRY_PASSWORD=your_password
 ```
+
+### Automated Setup
+
+Alternatively, use our setup script which handles uvx installation and dependency management:
+
+```bash
+# Clone the repository
+git clone https://github.com/bmorphism/graphistry-mcp.git
+cd graphistry-mcp
+
+# Run the setup script
+./setup-graphistry-mcp.sh
+
+# Set up your Graphistry credentials
+export GRAPHISTRY_USERNAME=your_username
+export GRAPHISTRY_PASSWORD=your_password
+```
+
+### Verifying Your Installation
+
+To make sure everything is set up correctly, run our verification script:
+
+```bash
+# Make the verification script executable
+chmod +x ./verify-installation.sh
+
+# Run the script
+./verify-installation.sh
+```
+
+This will check for:
+1. UV/UVX installation
+2. Required Python packages
+3. All necessary server files
+4. Server startup test
+5. Health endpoint verification
+
+If any issues are found, the script will provide guidance on how to fix them.
 
 ## Usage
 
@@ -59,21 +113,60 @@ Before using this server, you must:
 
 These credentials enable the server to create and access GPU-accelerated visualizations.
 
+### Installing Dependencies
+
+Use our automated dependency installer to ensure all required packages are available:
+
+```bash
+# Make the installer executable
+chmod +x ./install-deps.sh
+
+# Run the installer
+./install-deps.sh
+```
+
+This will install all required packages using uv/uvx and create a `.env` file for your credentials if one doesn't exist.
+
 ### Starting the server
 
-The server can be run in two modes:
+The server can be run in two modes using our improved FastMCP implementation:
 
 1. Standard stdio mode (for typical MCP clients):
 ```bash
 # Make sure your Graphistry credentials are set before running
-./start-graphistry-mcp.sh
+python run_graphistry_mcp.py
 ```
 
 2. HTTP mode (for web-based clients or testing):
 ```bash
 # Make sure your Graphistry credentials are set before running
+python run_graphistry_mcp.py --http 8080
+```
+
+For convenience, you can also use our startup scripts:
+
+```bash
+# Studio mode
+./start-graphistry-mcp.sh
+
+# HTTP mode
 ./start-graphistry-mcp.sh --http 8080
 ```
+
+### Port Management
+
+The server now includes advanced port management to handle situations where port 8080 is already in use:
+
+1. **Port Conflict Detection**: Automatically checks if port 8080 (or any specified port) is available before starting
+2. **Process Identification**: Uses OS-specific commands to identify what process is using the port
+3. **Automatic Port Switching**: When in HTTP mode, can automatically select an alternative port if default is busy
+4. **Suggested Alternatives**: Provides suggested available ports in case of conflicts
+5. **Comprehensive Diagnostics**: Use the `--test-connection` flag to check port availability:
+   ```bash
+   python run_graphistry_mcp.py --test-connection
+   ```
+
+This prevents crashes from port conflicts and helps diagnose issues with lingering processes.
 
 ### Available Tools
 
@@ -162,6 +255,18 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Example Applications
+
+Check out the `examples` directory for more advanced applications:
+
+1. **Identity and Access Management (IAM) Visualization** - An interactive demo showing how to visualize and analyze complex IAM relationships in an organization. Identifies security risks such as dormant accounts with high privileges, privilege escalation paths, and over-privileged service accounts.
+
+To run the IAM demo:
+```bash
+cd examples
+./run_iam_demo.sh
+```
+
 > **Note**: The visualization URL will only work if you have properly set up your Graphistry credentials and have an active account at [hub.graphistry.com](https://hub.graphistry.com).
 
 ## Docker Usage
@@ -188,17 +293,40 @@ These environment variables will be passed to the container, allowing it to auth
 uvx pip install -e ".[dev]"
 
 # Run tests
-pytest
+uvx pytest
 
 # Format code
-black .
+uvx black .
 
 # Lint code
-ruff check .
+uvx ruff check .
 
 # Type check
-mypy src/
+uvx mypy src/
 ```
+
+### Auto-Installing Dependencies
+
+The server is designed to automatically install any missing dependencies using `uvx`. If you encounter any import errors when running the server, it will attempt to install the required packages on-the-fly.
+
+This behavior ensures that all required packages are available, even if they weren't explicitly installed during the initial setup. You'll see messages in the console when dependencies are being installed automatically.
+
+### Performance Optimizations
+
+The Graphistry MCP server includes several performance optimizations:
+
+1. **LRU Caching**: Frequently used graph operations are cached using an LRU (Least Recently Used) cache to reduce computation time for repeated operations.
+
+2. **Lazy Loading**: Heavy dependencies are loaded on-demand to improve startup time and reduce memory usage when certain features aren't being utilized.
+
+3. **Health Monitoring**: A `/health` endpoint is available in HTTP mode to monitor server status and performance metrics.
+
+To access the health endpoint in HTTP mode:
+```bash
+curl http://localhost:8080/health
+```
+
+This returns a JSON response with server status and performance information.
 
 ## Graphistry Authentication Details
 

@@ -1,0 +1,51 @@
+{
+  "mcpServers": {
+    "graphistry-http": {
+      "type": "http", 
+      "url": "http://localhost:8082",
+      "description": "Graphistry GPU-accelerated graph visualization with pattern detection and network analysis (HTTP mode)",
+      "disabled": false,
+      "autoApprove": [
+        "visualize_graph",
+        "get_graph_info",
+        "apply_layout",
+        "detect_patterns",
+        "health_check"
+      ],
+      "alwaysAllow": [
+        "get_graph_info",
+        "health_check"
+      ]
+    },
+    "graphistry": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/barton/infinity-topos/graphistry-mcp",
+        "run", 
+        "python",
+        "/Users/barton/infinity-topos/graphistry-mcp/run_graphistry_server.py"
+      ],
+      "env": {
+        "GRAPHISTRY_USERNAME": "",
+        "GRAPHISTRY_PASSWORD": "",
+        "LOG_LEVEL": "INFO",
+        "PYTHONPATH": "/Users/barton/infinity-topos/graphistry-mcp"
+      },
+      "description": "Graphistry GPU-accelerated graph visualization with pattern detection and network analysis",
+      "disabled": true,
+      "autoApprove": [
+        "visualize_graph",
+        "get_graph_info",
+        "apply_layout",
+        "detect_patterns",
+        "health_check"
+      ],
+      "alwaysAllow": [
+        "get_graph_info",
+        "health_check"
+      ],
+      "type": "stdio"
+    }
+  }
+}

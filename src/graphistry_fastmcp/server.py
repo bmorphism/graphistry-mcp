@@ -1,3 +1,7 @@
+from enum import Enum
+# Record start time globally
+import time
+SERVER_START_TIME = time.time()
 """
 Graphistry FastMCP Server implementation.
 
@@ -15,24 +19,87 @@ import logging
 import os
 import sys
 import uuid
+import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TypedDict, Annotated, Literal
+from typing import Any, Dict, List, Optional, TypedDict, Annotated, Literal, Callable
 from pathlib import Path
+from functools import lru_cache, wraps
 
-import pandas as pd
-import networkx as nx
-from fastmcp import FastMCP
-from pydantic import Field, BaseModel
+try:
+    import pandas as pd
+except ImportError:
+    import subprocess
+    print("Installing pandas via uvx...")
+    subprocess.check_call(["uvx", "pip", "install", "pandas"])
+    import pandas as pd
+
+try:
+    import networkx as nx
+except ImportError:
+    import subprocess
+    print("Installing networkx via uvx...")
+    subprocess.check_call(["uvx", "pip", "install", "networkx"])
+    import networkx as nx
+
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    import subprocess
+    print("Installing fastmcp>=2.2.6 via uvx...")
+    subprocess.check_call(["uvx", "pip", "install", "fastmcp>=2.2.6"])
+    from fastmcp import FastMCP
+
+try:
+    from pydantic import Field, BaseModel
+except ImportError:
+    import subprocess
+    print("Installing pydantic via uvx...")
+    subprocess.check_call(["uvx", "pip", "install", "pydantic"])
+    from pydantic import Field, BaseModel
 
 # Try to load .env file if it exists
 try:
     from dotenv import load_dotenv
-    env_path = Path(".") / ".env"
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path)
-        print(f"Loaded environment variables from {env_path.absolute()}")
+    # Check multiple possible locations for .env file
+    possible_paths = [
+        Path(".") / ".env",                     # Current directory
+        Path("..") / ".env",                    # Parent directory
+        Path(__file__).parent.parent.parent / ".env"  # Project root
+    ]
+    
+    loaded = False
+    for env_path in possible_paths:
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path)
+            print(f"Loaded environment variables from {env_path.absolute()}")
+            loaded = True
+            break
+    
+    if not loaded:
+        print("No .env file found in any of the searched locations.")
 except ImportError:
-    pass
+    import subprocess
+    print("Installing python-dotenv via uvx...")
+    subprocess.check_call(["pip", "install", "python-dotenv"])
+    from dotenv import load_dotenv
+    
+    # Check multiple possible locations for .env file
+    possible_paths = [
+        Path(".") / ".env",                     # Current directory
+        Path("..") / ".env",                    # Parent directory
+        Path(__file__).parent.parent.parent / ".env"  # Project root
+    ]
+    
+    loaded = False
+    for env_path in possible_paths:
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path)
+            print(f"Loaded environment variables from {env_path.absolute()}")
+            loaded = True
+            break
+    
+    if not loaded:
+        print("No .env file found in any of the searched locations.")
 
 # Configure logging first
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +107,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize graphistry client
 try:
+    # First try to import real graphistry
     import graphistry
     HAS_GRAPHISTRY = True
     logger.info("Graphistry package available")
@@ -49,47 +117,224 @@ try:
     GRAPHISTRY_USERNAME = os.environ.get("GRAPHISTRY_USERNAME")
     GRAPHISTRY_PASSWORD = os.environ.get("GRAPHISTRY_PASSWORD")
     
-    if GRAPHISTRY_USERNAME and GRAPHISTRY_PASSWORD:
-        try:
-            graphistry.register(
-                api=3,
-                protocol="https",
-                server="hub.graphistry.com",
-                username=GRAPHISTRY_USERNAME,
-                password=GRAPHISTRY_PASSWORD
-            )
-            logger.info("✅ Graphistry client registered successfully with credentials")
-        except Exception as e:
-            logger.warning(f"❌ Failed to register Graphistry client: {str(e)}")
-            logger.warning("Please check your Graphistry credentials and ensure your account is active")
-    else:
-        logger.warning("⚠️  Graphistry credentials not found in environment variables")
-        logger.warning("Please set GRAPHISTRY_USERNAME and GRAPHISTRY_PASSWORD environment variables")
-        logger.warning("Visit https://hub.graphistry.com to sign up for a free account")
+    try:
+        # Try to use real graphistry with credentials
+        if GRAPHISTRY_USERNAME and GRAPHISTRY_PASSWORD:
+            try:
+                graphistry.register(
+                    api=3,
+                    protocol="https",
+                    server="hub.graphistry.com",
+                    username=GRAPHISTRY_USERNAME,
+                    password=GRAPHISTRY_PASSWORD
+                )
+                logger.info("✅ Graphistry client registered successfully with credentials")
+                USE_MOCK = False
+            except Exception as e:
+                logger.warning(f"❌ Failed to register Graphistry client: {str(e)}")
+                logger.warning("Please check your Graphistry credentials and ensure your account is active")
+                logger.warning("Falling back to mock Graphistry implementation for development")
+                # Fall back to mock implementation
+                try:
+                    # Try mock implementation
+                    import os
+                    import sys
+                    # Get the current directory
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    # Add to path if needed
+                    if current_dir not in sys.path:
+                        sys.path.append(current_dir)
+                    # Now import directly
+                    from mock_graphistry import register, graph, edges, nodes, networkx, settings
+                except Exception as e:
+                    logger.error(f"Mock import error: {str(e)}")
+                    raise
+                # Replace functions in the graphistry module with our mock implementations
+                graphistry.register = register
+                graphistry.graph = graph
+                graphistry.edges = edges
+                graphistry.nodes = nodes
+                graphistry.networkx = networkx
+                graphistry.settings = settings
+                logger.info("✅ Using mock Graphistry implementation")
+                USE_MOCK = True
+        else:
+            logger.warning("⚠️  Graphistry credentials not found in environment variables")
+            logger.warning("Using mock Graphistry implementation for development")
+            # Use mock implementation
+            try:
+                # Try relative import within the package
+                from .mock_graphistry import register, graph, edges, nodes, networkx, settings
+            except ImportError:
+                # Try absolute import
+                from src.graphistry_fastmcp.mock_graphistry import register, graph, edges, nodes, networkx, settings
+            # Replace functions in the graphistry module with our mock implementations
+            graphistry.register = register
+            graphistry.graph = graph
+            graphistry.edges = edges
+            graphistry.nodes = nodes
+            graphistry.networkx = networkx
+            graphistry.settings = settings
+            logger.info("✅ Using mock Graphistry implementation")
+            USE_MOCK = True
+    except Exception as mock_error:
+        logger.error(f"❌ Failed to set up either real or mock Graphistry: {str(mock_error)}")
+        
 except ImportError:
-    HAS_GRAPHISTRY = False
-    logger.warning("❌ Graphistry package not found, visualization capabilities will be limited")
-    logger.warning("Install the graphistry package with: uvx pip install graphistry")
+    import subprocess
+    print("Installing graphistry via uvx...")
+    subprocess.check_call(["uvx", "pip", "install", "graphistry"])
+    import graphistry
+    HAS_GRAPHISTRY = True
+    
+    # After installing, try again with credentials
+    GRAPHISTRY_USERNAME = os.environ.get("GRAPHISTRY_USERNAME")
+    GRAPHISTRY_PASSWORD = os.environ.get("GRAPHISTRY_PASSWORD")
+    
+    try:
+        if GRAPHISTRY_USERNAME and GRAPHISTRY_PASSWORD:
+            try:
+                graphistry.register(
+                    api=3,
+                    protocol="https",
+                    server="hub.graphistry.com",
+                    username=GRAPHISTRY_USERNAME,
+                    password=GRAPHISTRY_PASSWORD
+                )
+                logger.info("✅ Graphistry client registered successfully with credentials")
+                USE_MOCK = False
+            except Exception as e:
+                logger.warning(f"❌ Failed to register Graphistry client: {str(e)}")
+                logger.warning("Falling back to mock Graphistry implementation for development")
+                try:
+                    # Try mock implementation
+                    import os
+                    import sys
+                    # Get the current directory
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    # Add to path if needed
+                    if current_dir not in sys.path:
+                        sys.path.append(current_dir)
+                    # Now import directly
+                    from mock_graphistry import register, graph, edges, nodes, networkx, settings
+                except Exception as e:
+                    logger.error(f"Mock import error: {str(e)}")
+                    raise
+                # Replace functions in the graphistry module with our mock implementations
+                graphistry.register = register
+                graphistry.graph = graph
+                graphistry.edges = edges
+                graphistry.nodes = nodes
+                graphistry.networkx = networkx
+                graphistry.settings = settings
+                logger.info("✅ Using mock Graphistry implementation")
+                USE_MOCK = True
+        else:
+            logger.warning("⚠️  Graphistry credentials not found in environment variables")
+            logger.warning("Using mock Graphistry implementation for development") 
+            try:
+                # Try relative import within the package
+                from .mock_graphistry import register, graph, edges, nodes, networkx, settings
+            except ImportError:
+                # Try absolute import
+                from src.graphistry_fastmcp.mock_graphistry import register, graph, edges, nodes, networkx, settings
+            # Replace functions in the graphistry module with our mock implementations
+            graphistry.register = register
+            graphistry.graph = graph
+            graphistry.edges = edges
+            graphistry.nodes = nodes
+            graphistry.networkx = networkx
+            graphistry.settings = settings
+            logger.info("✅ Using mock Graphistry implementation")
+            USE_MOCK = True
+    except Exception as mock_error:
+        logger.error(f"❌ Failed to set up either real or mock Graphistry: {str(mock_error)}")
 
 # Logger is already configured above
 
+# Define version
+__version__ = "0.2.0"
+
 # Initialize the FastMCP server
 mcp = FastMCP(
-    "Graphistry Graph Visualization",
+    name="Graphistry Graph Visualization",
     dependencies=[
         "graphistry",
         "pandas",
-        "networkx"
+        "networkx",
+        "python-louvain",
+        "uvicorn",
+        "pydantic",
     ],
+    
+    # Optimize performance with increased concurrency
+    n_workers=4,
+    
+    # Add detailed description
+    description="GPU-accelerated graph visualization and analysis tools powered by Graphistry"
 )
 
-# Initialize in-memory graph cache
-graph_cache: Dict[str, Dict[str, Any]] = {}
+# Initialize optimized in-memory graph cache with LRU eviction
+
+# Maximum size of cache - adjust based on memory requirements
+MAX_CACHE_SIZE = 100
+
+class GraphCache:
+    def __init__(self, max_size=MAX_CACHE_SIZE):
+        self.cache: Dict[str, Dict[str, Any]] = {}
+        self._get_graph = lru_cache(maxsize=max_size)(self._get_graph_impl)
+        self._max_size = max_size
+        self._access_order = []
+        
+    def __getitem__(self, key):
+        if key in self.cache:
+            # Update access order
+            if key in self._access_order:
+                self._access_order.remove(key)
+            self._access_order.append(key)
+            return self.cache[key]
+        raise KeyError(key)
+    
+    def __setitem__(self, key, value):
+        # If cache is full, evict least recently used item
+        if len(self.cache) >= self._max_size and key not in self.cache:
+            if self._access_order:
+                oldest_key = self._access_order.pop(0)
+                self.cache.pop(oldest_key, None)
+        
+        # Add to cache and update access order
+        self.cache[key] = value
+        if key in self._access_order:
+            self._access_order.remove(key)
+        self._access_order.append(key)
+    
+    def __contains__(self, key):
+        return key in self.cache
+    
+    @lru_cache(maxsize=MAX_CACHE_SIZE)
+    def _get_graph_impl(self, graph_id):
+        """Cached graph retrieval implementation"""
+        return self.cache.get(graph_id, {}).get("graph", None)
+    
+    def get_graph(self, graph_id):
+        """Get a graph with caching"""
+        return self._get_graph(graph_id)
+    
+    def clear_cache(self):
+        """Clear the cache"""
+        self.cache.clear()
+        self._access_order.clear()
+        self._get_graph.cache_clear()
+
+# Initialize the graph cache
+graph_cache = GraphCache(max_size=MAX_CACHE_SIZE)
 
 
-class GraphFormat(str, Literal["pandas", "networkx", "edge_list"]):
+class GraphFormat(str, Enum):
     """The format of the input graph data."""
-    pass
+    PANDAS = "pandas"
+    NETWORKX = "networkx"
+    EDGE_LIST = "edge_list"
 
 
 class Node(BaseModel):
@@ -218,6 +463,7 @@ def visualize_graph(
 
 
 @mcp.tool()
+@lru_cache(maxsize=50)  # Cache results for better performance
 def get_graph_info(
     graph_id: Annotated[str, Field(description="ID of the graph to retrieve information for")]
 ) -> Dict[str, Any]:
@@ -236,13 +482,34 @@ def get_graph_info(
         # If we can get a networkx graph, compute some metrics
         if hasattr(g, '_nx'):
             nx_graph = g._nx
+            
+            # Start with basic metrics that are fast to compute
             metrics = {
                 "num_nodes": nx_graph.number_of_nodes(),
                 "num_edges": nx_graph.number_of_edges(),
                 "density": nx.density(nx_graph),
-                "is_connected": nx.is_connected(nx_graph) if nx_graph.number_of_nodes() > 0 else False,
-                "average_clustering": nx.average_clustering(nx_graph) if nx_graph.number_of_nodes() > 0 else 0,
             }
+            
+            # Only compute expensive metrics for smaller graphs
+            if nx_graph.number_of_nodes() < 1000:
+                if nx_graph.number_of_nodes() > 0:
+                    # Add connectivity check for non-empty graphs
+                    try:
+                        metrics["is_connected"] = nx.is_connected(nx_graph)
+                    except:
+                        # For directed graphs or other special cases
+                        metrics["is_connected"] = False
+                
+                # Compute clustering only for small graphs (expensive operation)
+                if nx_graph.number_of_nodes() < 500 and nx_graph.number_of_nodes() > 0:
+                    metrics["average_clustering"] = nx.average_clustering(nx_graph)
+                
+                # Add degree statistics
+                degrees = [d for _, d in nx_graph.degree()]
+                if degrees:
+                    metrics["min_degree"] = min(degrees)
+                    metrics["max_degree"] = max(degrees)
+                    metrics["avg_degree"] = sum(degrees) / len(degrees)
     except Exception as e:
         logger.warning(f"Could not compute graph metrics: {e}")
     
@@ -302,9 +569,12 @@ def apply_layout(
     }
 
 
-class AnalysisType(str, Literal["community_detection", "centrality", "path_finding", "anomaly_detection"]):
+class AnalysisType(str, Enum):
     """The type of graph analysis to perform."""
-    pass
+    COMMUNITY_DETECTION = "community_detection"
+    CENTRALITY = "centrality"
+    PATH_FINDING = "path_finding"
+    ANOMALY_DETECTION = "anomaly_detection"
 
 
 class AnalysisOptions(BaseModel):
@@ -358,12 +628,19 @@ def detect_patterns(
     }
     
     # Perform the requested analysis
-    if analysis_type == "community_detection":
+    if analysis_type == AnalysisType.COMMUNITY_DETECTION:
         # Detect communities using appropriate algorithm
         algorithm = options.algorithm
         if algorithm == "louvain":
             try:
-                from community import best_partition
+                try:
+                    from community import best_partition
+                except ImportError:
+                    import subprocess
+                    print("Installing python-louvain via uvx...")
+                    subprocess.check_call(["uvx", "pip", "install", "python-louvain"])
+                    from community import best_partition
+                
                 partition = best_partition(nx_graph)
                 # Convert partition to a format for visualization
                 communities = {}
@@ -391,12 +668,12 @@ def detect_patterns(
                 graph_cache[graph_id]["url"] = g.plot(render=False)
                 result["url"] = graph_cache[graph_id]["url"]
                 
-            except ImportError:
-                result["error"] = "Community detection requires the python-louvain package"
+            except Exception as e:
+                result["error"] = f"Error in community detection: {str(e)}"
         else:
             result["error"] = f"Unsupported community detection algorithm: {algorithm}"
     
-    elif analysis_type == "centrality":
+    elif analysis_type == AnalysisType.CENTRALITY:
         # Calculate various centrality metrics
         try:
             # Get top N nodes by different centrality measures
@@ -435,7 +712,7 @@ def detect_patterns(
         except Exception as e:
             result["error"] = f"Error calculating centrality: {str(e)}"
     
-    elif analysis_type == "path_finding":
+    elif analysis_type == AnalysisType.PATH_FINDING:
         # Find paths between nodes
         source = options.source
         target = options.target
@@ -469,7 +746,7 @@ def detect_patterns(
             except Exception as e:
                 result["error"] = f"Error finding path: {str(e)}"
     
-    elif analysis_type == "anomaly_detection":
+    elif analysis_type == AnalysisType.ANOMALY_DETECTION:
         # Detect anomalies in the graph
         try:
             # Calculate various metrics to identify anomalies
@@ -512,10 +789,113 @@ def detect_patterns(
     return result
 
 
+# Health check endpoint
+@mcp.tool()
+def health_check() -> Dict[str, Any]:
+    """
+    Check the health of the server and return system/resource information.
+    
+    This tool provides comprehensive health diagnostics including:
+    - Server status and uptime
+    - Memory usage and system information
+    - Cache utilization and performance metrics
+    - Port status for HTTP mode
+    - Graphistry connection status
+    
+    Returns:
+        Dict with status, uptime, memory usage, and service information.
+    """
+    # Calculate uptime
+    uptime_seconds = time.time() - SERVER_START_TIME
+    
+    # Get memory usage
+    import psutil
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_usage = {
+            "rss_mb": memory_info.rss / (1024 * 1024),  # RSS in MB
+            "vms_mb": memory_info.vms / (1024 * 1024),  # VMS in MB
+            "percent": process.memory_percent()
+        }
+    except:
+        # If psutil fails, provide basic info
+        memory_usage = {"available": "psutil not installed"}
+        try:
+            import subprocess
+            print("Installing psutil via uvx for better health monitoring...")
+            subprocess.check_call(["uvx", "pip", "install", "psutil"])
+        except:
+            pass
+    
+    # Get cache info
+    cache_info = {
+        "size": len(graph_cache.cache),
+        "max_size": graph_cache._max_size,
+        "usage_percent": (len(graph_cache.cache) / graph_cache._max_size) * 100 if graph_cache._max_size > 0 else 0
+    }
+    
+    # Get Graphistry connection status
+    graphistry_status = {
+        "available": HAS_GRAPHISTRY,
+        "credentials_configured": bool(GRAPHISTRY_USERNAME and GRAPHISTRY_PASSWORD)
+    }
+    
+    # Basic system info
+    system_info = {
+        "python_version": sys.version,
+        "platform": sys.platform,
+        "server_pid": os.getpid()
+    }
+    
+    # Check port status for HTTP mode
+    port_info = {
+        "http_mode": len(sys.argv) > 1 and sys.argv[1] == "--http",
+        "default_port": 8080
+    }
+    
+    if port_info["http_mode"]:
+        # Get the actual port in use
+        if len(sys.argv) > 2:
+            try:
+                port_info["current_port"] = int(sys.argv[2])
+            except (ValueError, IndexError):
+                port_info["current_port"] = 8080
+        else:
+            port_info["current_port"] = 8080
+            
+        # Check if default port is available
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("localhost", 8080))
+                port_info["default_port_available"] = True
+                s.close()
+        except OSError:
+            port_info["default_port_available"] = False
+    
+    return {
+        "status": "healthy",
+        "version": __version__,
+        "uptime_seconds": uptime_seconds,
+        "memory_usage": memory_usage,
+        "cache_info": cache_info,
+        "graphistry_status": graphistry_status,
+        "system_info": system_info,
+        "port_info": port_info,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 def main() -> None:
     """
     Run the FastMCP server in the appropriate mode based on command line arguments.
     """
+    # Record start time for uptime tracking in global scope
+    global SERVER_START_TIME
+    
+    # Use at module level
+    SERVER_START_TIME = globals().get('SERVER_START_TIME', time.time())
+    
     # Check Graphistry registration status before starting server
     if HAS_GRAPHISTRY:
         if GRAPHISTRY_USERNAME and GRAPHISTRY_PASSWORD:
@@ -530,6 +910,25 @@ def main() -> None:
     
     # Determine server mode from command line arguments
     import sys
+    import socket
+    
+    def is_port_in_use(port):
+        """Check if a port is already in use by attempting to bind to it."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("localhost", port))
+                return False
+            except socket.error:
+                return True
+    
+    def find_available_port(start_port, max_attempts=20):
+        """Find an available port starting from start_port."""
+        for port_offset in range(max_attempts):
+            port = start_port + port_offset
+            if not is_port_in_use(port):
+                return port
+        return None
+
     if len(sys.argv) > 1 and sys.argv[1] == "--http":
         port = 8080
         if len(sys.argv) > 2:
@@ -538,13 +937,130 @@ def main() -> None:
             except ValueError:
                 logger.error(f"Invalid port: {sys.argv[2]}, using default 8080")
         
+        # Check if port is already in use
+        if is_port_in_use(port):
+            # Try to use the suggested port from environment if available
+            suggested_port = os.environ.get("GRAPHISTRY_SUGGESTED_PORT")
+            if suggested_port and suggested_port.isdigit():
+                alt_port = int(suggested_port)
+                if not is_port_in_use(alt_port):
+                    logger.info(f"Port {port} is in use, switching to alternative port {alt_port}")
+                    print(f"Port {port} is in use, switching to alternative port {alt_port}", file=sys.stderr)
+                    port = alt_port
+                else:
+                    # Find another available port
+                    alt_port = find_available_port(8081)
+                    if alt_port:
+                        logger.info(f"Port {port} is in use, switching to alternative port {alt_port}")
+                        print(f"Port {port} is in use, switching to alternative port {alt_port}", file=sys.stderr)
+                        port = alt_port
+                    else:
+                        logger.error(f"Port {port} is already in use and no alternative ports are available")
+                        print(f"❌ Error: Port {port} is already in use and no alternative ports are available", file=sys.stderr)
+                        print(f"Please stop the process using port {port} or specify a different port", file=sys.stderr)
+                        sys.exit(1)
+            else:
+                # Find an available port
+                alt_port = find_available_port(8081)
+                if alt_port:
+                    logger.info(f"Port {port} is in use, switching to alternative port {alt_port}")
+                    print(f"Port {port} is in use, switching to alternative port {alt_port}", file=sys.stderr)
+                    port = alt_port
+                else:
+                    logger.error(f"Port {port} is already in use and no alternative ports are available")
+                    print(f"❌ Error: Port {port} is already in use and no alternative ports are available", file=sys.stderr)
+                    print(f"Please stop the process using port {port} or specify a different port", file=sys.stderr)
+                    sys.exit(1)
+        
         logger.info(f"Starting Graphistry FastMCP server on HTTP port {port}")
-        import uvicorn
-        uvicorn.run(mcp.starlette, host="0.0.0.0", port=port)
+        try:
+            import uvicorn
+        except ImportError:
+            import subprocess
+            print("Installing uvicorn via uvx...")
+            subprocess.check_call(["uvx", "pip", "install", "uvicorn"])
+            import uvicorn
+            
+        # Print startup information
+        logger.info(f"✨ Server ready at http://localhost:{port}")
+        print(f"✨ Server started successfully on port {port}", file=sys.stderr)
+        print(f"✨ Server URL: http://localhost:{port}", file=sys.stderr)
+        # Use public API to get tool count, avoiding _tools attribute
+        tool_count = len([t for t in dir(mcp) if callable(getattr(mcp, t)) and not t.startswith('_')])
+        logger.info(f"📊 GraphistryMCP v{__version__} initialized with {tool_count} tools")
+        
+        # Run with optimized settings
+        # Use FastMCP's preferred HTTP method
+        if hasattr(mcp, 'get_app'):
+            app = mcp.get_app()
+            
+            # Use single worker mode to avoid import string requirement
+            uvicorn.run(
+                app, 
+                host="0.0.0.0", 
+                port=port,
+                log_level="info",
+                timeout_keep_alive=65
+            )
+        elif hasattr(mcp, 'sse_app'):
+            app = mcp.sse_app
+            
+            # Use single worker mode to avoid import string requirement
+            uvicorn.run(
+                app, 
+                host="0.0.0.0", 
+                port=port,
+                log_level="info",
+                timeout_keep_alive=65
+            )
+        elif hasattr(mcp, 'run_http'):
+            # Some versions of FastMCP use run_http method
+            mcp.run_http(host="0.0.0.0", port=port)
+        else:
+            from fastapi import FastAPI, Request
+            from fastapi.responses import JSONResponse
+            
+            # Create a minimal FastAPI wrapper if no HTTP method available
+            app = FastAPI(title="Graphistry MCP HTTP Bridge")
+            
+            @app.post("/mcp")
+            async def http_bridge(request: Request):
+                data = await request.json()
+                input_data = data.get("input", {})
+                try:
+                    result = await mcp.run(input_data)
+                    return JSONResponse(content=result)
+                except Exception as e:
+                    return JSONResponse(
+                        status_code=500,
+                        content={"error": str(e)}
+                    )
+                    
+            uvicorn.run(
+                app, 
+                host="0.0.0.0", 
+                port=port,
+                log_level="info",
+                timeout_keep_alive=65
+            )
     else:
-        # Default mode uses stdio
+        # Default mode uses stdio transport
         logger.info("Starting Graphistry FastMCP server with stdio transport")
-        asyncio.run(mcp.run_stdio())
+        # Use public API to get tool count, avoiding _tools attribute
+        tool_count = len([t for t in dir(mcp) if callable(getattr(mcp, t)) and not t.startswith('_')])
+        logger.info(f"📊 GraphistryMCP v{__version__} initialized with {tool_count} tools")
+        
+        # Check which transport method is available and use it
+        if hasattr(mcp, 'run_stdio_async'):
+            logger.info("Using run_stdio_async transport method")
+            asyncio.run(mcp.run_stdio_async())
+        elif hasattr(mcp, 'run'):
+            logger.info("Using run transport method")
+            asyncio.run(mcp.run())
+        else:
+            logger.error("No valid transport method found on mcp object")
+            print("Error: No valid transport method found on mcp object", file=sys.stderr)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ name = "graphistry-mcp-server"
 version = "0.2.0"
 description = "Graphistry MCP integration for GPU-accelerated graph visualization using FastMCP"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Graphistry Community" }
@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "fastmcp>=0.6.1",
+    "fastmcp>=2.2.6",
     "graphistry",  # Required for hub.graphistry.com visualizations
     "pandas",
     "networkx",
