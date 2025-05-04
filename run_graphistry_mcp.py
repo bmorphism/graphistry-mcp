@@ -352,67 +352,13 @@ try:
                     print(f"❌ Authentication error with .env file credentials: {auth_error}")
             else:
                 print("\nNo credentials found in .env file to test.")
-                
-            # Try with multiple sets of demo credentials
-            demo_credentials = [
-                {"username": "customer@graphistry.com", "password": "i-am-customer"},
-                {"username": "guest@graphistry.com", "password": "guest"},
-                {"username": "demo@graphistry.com", "password": "password"},
-                {"username": "public@graphistry.com", "password": "public"},
-                {"username": "anonymous@graphistry.com", "password": "anonymous"}
-            ]
-            
-            success = False
-            for i, creds in enumerate(demo_credentials):
-                print(f"\nTest {i+3}: Using demo credentials - Username: {creds['username']}")
-                try:
-                    graphistry.register(
-                        api=3,
-                        protocol="https",
-                        server="hub.graphistry.com",
-                        username=creds['username'],
-                        password=creds['password']
-                    )
-                    print(f"✅ Successfully registered with Graphistry API using {creds['username']} credentials")
-                    # Save these credentials to .env file
-                    print("Saving working credentials to .env file...")
-                    with open(dotenv_path, 'w') as f:
-                        f.write(f"GRAPHISTRY_USERNAME={creds['username']}\n")
-                        f.write(f"GRAPHISTRY_PASSWORD={creds['password']}\n")
-                    print("✅ Saved working credentials to .env file")
-                    success = True
-                    break
-                except Exception as auth_error:
-                    print(f"❌ Authentication error with {creds['username']} credentials: {auth_error}")
-            
-            if not success:
-                print("\n❌ None of the demo credentials worked.")
-                print("Please obtain valid Graphistry credentials.")
-                
-            # Try anonymous login as a last resort
-            print("\nTest 8: Using anonymous login (no credentials)")
-            try:
-                graphistry.register(
-                    api=3,
-                    protocol="https",
-                    server="hub.graphistry.com"
-                )
-                print("✅ Successfully registered with Graphistry API using anonymous login")
-                print("Note: Anonymous login has limited functionality")
-            except Exception as auth_error:
-                print(f"❌ Anonymous login also failed: {auth_error}")
-            
-            print("\nTest complete")
-            # Still exit with success since we could import the necessary libraries
-            sys.exit(0)
         except Exception as e:
-            print(f"❌ Error testing Graphistry connection: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error testing Graphistry API connection: {e}")
+            print(f"Error testing Graphistry API connection: {e}", file=sys.stderr)
             sys.exit(1)
-    
-    print(f"Server startup took {time.time() - START_TIME:.2f} seconds", file=sys.stderr)
-    print("Graphistry MCP server ready to process requests", file=sys.stderr)
+
+        print(f"Server startup took {time.time() - START_TIME:.2f} seconds", file=sys.stderr)
+        print("Graphistry MCP server ready to process requests", file=sys.stderr)
     
     # Run the server using the appropriate method
     # We need to handle both run_stdio_async and run methods
