@@ -134,49 +134,8 @@ try:
                 logger.warning(f"❌ Failed to register Graphistry client: {str(e)}")
                 logger.warning("Please check your Graphistry credentials and ensure your account is active")
                 logger.warning("Falling back to mock Graphistry implementation for development")
-                # Fall back to mock implementation
-                try:
-                    # Try mock implementation
-                    import os
-                    import sys
-                    # Get the current directory
-                    current_dir = os.path.dirname(os.path.abspath(__file__))
-                    # Add to path if needed
-                    if current_dir not in sys.path:
-                        sys.path.append(current_dir)
-                    # Now import directly
-                    from mock_graphistry import register, graph, edges, nodes, networkx, settings
-                except Exception as e:
-                    logger.error(f"Mock import error: {str(e)}")
-                    raise
-                # Replace functions in the graphistry module with our mock implementations
-                graphistry.register = register
-                graphistry.graph = graph
-                graphistry.edges = edges
-                graphistry.nodes = nodes
-                graphistry.networkx = networkx
-                graphistry.settings = settings
-                logger.info("✅ Using mock Graphistry implementation")
-                USE_MOCK = True
-        else:
-            logger.warning("⚠️  Graphistry credentials not found in environment variables")
-            logger.warning("Using mock Graphistry implementation for development")
-            # Use mock implementation
-            try:
-                # Try relative import within the package
-                from .mock_graphistry import register, graph, edges, nodes, networkx, settings
-            except ImportError:
-                # Try absolute import
-                from src.graphistry_fastmcp.mock_graphistry import register, graph, edges, nodes, networkx, settings
-            # Replace functions in the graphistry module with our mock implementations
-            graphistry.register = register
-            graphistry.graph = graph
-            graphistry.edges = edges
-            graphistry.nodes = nodes
-            graphistry.networkx = networkx
-            graphistry.settings = settings
-            logger.info("✅ Using mock Graphistry implementation")
-            USE_MOCK = True
+
+
     except Exception as mock_error:
         logger.error(f"❌ Failed to set up either real or mock Graphistry: {str(mock_error)}")
         
@@ -202,55 +161,13 @@ except ImportError:
                     password=GRAPHISTRY_PASSWORD
                 )
                 logger.info("✅ Graphistry client registered successfully with credentials")
-                USE_MOCK = False
             except Exception as e:
                 logger.warning(f"❌ Failed to register Graphistry client: {str(e)}")
                 logger.warning("Falling back to mock Graphistry implementation for development")
-                try:
-                    # Try mock implementation
-                    import os
-                    import sys
-                    # Get the current directory
-                    current_dir = os.path.dirname(os.path.abspath(__file__))
-                    # Add to path if needed
-                    if current_dir not in sys.path:
-                        sys.path.append(current_dir)
-                    # Now import directly
-                    from mock_graphistry import register, graph, edges, nodes, networkx, settings
-                except Exception as e:
-                    logger.error(f"Mock import error: {str(e)}")
-                    raise
-                # Replace functions in the graphistry module with our mock implementations
-                graphistry.register = register
-                graphistry.graph = graph
-                graphistry.edges = edges
-                graphistry.nodes = nodes
-                graphistry.networkx = networkx
-                graphistry.settings = settings
-                logger.info("✅ Using mock Graphistry implementation")
-                USE_MOCK = True
-        else:
-            logger.warning("⚠️  Graphistry credentials not found in environment variables")
-            logger.warning("Using mock Graphistry implementation for development") 
-            try:
-                # Try relative import within the package
-                from .mock_graphistry import register, graph, edges, nodes, networkx, settings
-            except ImportError:
-                # Try absolute import
-                from src.graphistry_fastmcp.mock_graphistry import register, graph, edges, nodes, networkx, settings
-            # Replace functions in the graphistry module with our mock implementations
-            graphistry.register = register
-            graphistry.graph = graph
-            graphistry.edges = edges
-            graphistry.nodes = nodes
-            graphistry.networkx = networkx
-            graphistry.settings = settings
-            logger.info("✅ Using mock Graphistry implementation")
-            USE_MOCK = True
+    
     except Exception as mock_error:
         logger.error(f"❌ Failed to set up either real or mock Graphistry: {str(mock_error)}")
 
-# Logger is already configured above
 
 # Define version
 __version__ = "0.2.0"
@@ -393,7 +310,7 @@ def visualize_graph(
     """
     logger.info(f"Visualizing graph in {data_format} format")
     
-    g = graphistry.graph()
+    g: graphistry.Plottable = graphistry.bind()
     
     if data_format == "pandas":
         # Convert edge data to pandas DataFrame
@@ -439,7 +356,7 @@ def visualize_graph(
         raise ValueError(f"Unsupported data format: {data_format}")
     
     # Apply default settings
-    g = g.settings(url_params={'play': 7000, 'strongGravity': True})
+    g = g.settings(url_params={'play': 5000, 'strongGravity': True})
     
     # Generate a unique ID for this graph
     graph_id = str(uuid.uuid4())
@@ -541,7 +458,7 @@ def apply_layout(
     # Apply the requested layout
     layout_param: LayoutOptions = {}
     if layout == "force_directed":
-        layout_param = {'play': 7000, 'strongGravity': True}
+        layout_param = {'play': 5000, 'strongGravity': True}
     elif layout == "radial":
         layout_param = {'play': 0, 'layout': 'radial'}
     elif layout == "circle":
