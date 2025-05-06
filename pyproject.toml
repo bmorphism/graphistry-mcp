@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "graphistry-mcp-server"
-version = "0.2.0"
+version = "0.1.0"
 description = "Graphistry MCP integration for GPU-accelerated graph visualization using FastMCP"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,12 +25,13 @@ dependencies = [
     "asyncio",
     "uvicorn",
     "python-louvain",  # For community detection
-    "python-dotenv"    # For loading .env files with credentials
+    "python-dotenv",    # For loading .env files with credentials
+    "pytest",
+    "pytest-asyncio",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
     "black",
     "ruff",
     "mypy"
@@ -47,10 +48,10 @@ graphistry-mcp = "graphistry_fastmcp.server:main"
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
