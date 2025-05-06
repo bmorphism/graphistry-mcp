@@ -28,7 +28,7 @@ fi
 # Create a Python virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
-    uv venv .venv
+    uv venv .venv --python=python3.10
     echo "✅ Virtual environment created"
 else
     echo "✅ Virtual environment already exists"
@@ -44,7 +44,7 @@ uvx pip install -e ".[dev]"
 
 # Install key packages explicitly to ensure they're available
 echo "Installing key packages..."
-uvx pip install fastmcp>=2.2.6 graphistry pandas networkx uvicorn python-dotenv python-louvain pydantic psutil
+uvx pip install "fastmcp>=2.2.6" "graphistry" "pandas" "networkx" "uvicorn" "python-dotenv" "python-louvain" "pydantic" "psutil"
 
 # Make the start script executable
 chmod +x start-graphistry-mcp.sh
